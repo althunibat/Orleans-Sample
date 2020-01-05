@@ -22,10 +22,20 @@ namespace Godwit.Grains {
         ICustomStorageInterface<AccountState, IEvent> {
         private readonly IEventStoreConnection _connection;
         private readonly ILogger _logger;
+        private string _streamName;
 
         public AccountGrain(ILogger<AccountGrain> logger, IEventStoreConnection connection) {
             this._logger = logger;
             this._connection = connection;
+        }
+
+        private string StreamName {
+            get {
+                if (string.IsNullOrWhiteSpace(_streamName))
+                    _streamName = string.Concat(typeof(AccountState).Name.ToLower(), "-",
+                        GrainReference.GetPrimaryKey().ToString("N"));
+                return _streamName;
+            }
         }
 
         public async Task<bool> OpenAccount(OpenAccountCommand cmd) {
@@ -90,7 +100,7 @@ namespace Godwit.Grains {
             }
 
             foreach (var @event in updates)
-                await _connection.AppendToStreamAsync(GetStreamName(), ExpectedVersion.Any,
+                await _connection.AppendToStreamAsync(StreamName, ExpectedVersion.Any,
                     new EventData(@event.Id, @event.GetType().FullName, true,
                         Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(@event)),
                         Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new ArrayList()))));
@@ -104,14 +114,13 @@ namespace Godwit.Grains {
         }
 
         private async Task<ICollection<IEvent>> LoadEvents(int bufferSize) {
-            var stream = GetStreamName();
             var streamEvents = new List<ResolvedEvent>();
 
             StreamEventsSlice currentSlice;
             long nextSliceStart = StreamPosition.Start;
             do {
                 currentSlice =
-                    await _connection.ReadStreamEventsForwardAsync(stream, nextSliceStart,
+                    await _connection.ReadStreamEventsForwardAsync(StreamName, nextSliceStart,
                         bufferSize, false);
                 nextSliceStart = currentSlice.NextEventNumber;
 
@@ -130,14 +139,9 @@ namespace Godwit.Grains {
             return JsonConvert.DeserializeObject(Encoding.UTF8.GetString(@event.Data), eventType) as IEvent;
         }
 
-        private string GetStreamName() {
-            return string.Concat(typeof(AccountState).Name.ToLower(), "-",
-                GrainReference.GetPrimaryKey().ToString("N"));
-        }
 
         private async Task<int> GetCurrentVersion() {
-            var stream = GetStreamName();
-            var result = await _connection.ReadEventAsync(stream, StreamPosition.End, false);
+            var result = await _connection.ReadEventAsync(StreamName, StreamPosition.End, false);
             switch (result.Status) {
                 case EventReadStatus.NoStream:
                 case EventReadStatus.NotFound:
@@ -147,66 +151,6 @@ namespace Godwit.Grains {
                 default:
                     return -1;
             }
-        }
-
-        private class AccountOpenedEvent : IAccountOpened {
-            public AccountOpenedEvent(Guid accountId, string customerNumber, string branchCode, decimal amount) {
-                Id = Guid.NewGuid();
-                TimeStamp = DateTimeOffset.Now;
-                AccountId = accountId;
-                CustomerNumber = customerNumber;
-                BranchCode = branchCode;
-                Amount = amount;
-            }
-
-            public Guid Id { get; }
-            public DateTimeOffset TimeStamp { get; }
-            public Guid AccountId { get; }
-            public string CustomerNumber { get; }
-            public string BranchCode { get; }
-            public decimal Amount { get; }
-        }
-
-        private class AccountClosedEvent : IAccountClosed {
-            public AccountClosedEvent(Guid accountId, string reason) {
-                AccountId = accountId;
-                Reason = reason;
-                Id = Guid.NewGuid();
-                TimeStamp = DateTimeOffset.Now;
-            }
-
-            public Guid Id { get; }
-            public DateTimeOffset TimeStamp { get; }
-            public Guid AccountId { get; }
-            public string Reason { get; }
-        }
-
-        private class AccountDepositedEvent : IAccountDeposited {
-            public AccountDepositedEvent(Guid accountId, decimal amount) {
-                AccountId = accountId;
-                Amount = amount;
-                Id = Guid.NewGuid();
-                TimeStamp = DateTimeOffset.Now;
-            }
-
-            public Guid Id { get; }
-            public DateTimeOffset TimeStamp { get; }
-            public Guid AccountId { get; }
-            public decimal Amount { get; }
-        }
-
-        private class AccountWithDrawnEvent : IAccountWithDrawn {
-            public AccountWithDrawnEvent(Guid accountId, decimal amount) {
-                AccountId = accountId;
-                Amount = amount;
-                Id = Guid.NewGuid();
-                TimeStamp = DateTimeOffset.Now;
-            }
-
-            public Guid Id { get; }
-            public DateTimeOffset TimeStamp { get; }
-            public Guid AccountId { get; }
-            public decimal Amount { get; }
         }
     }
 }

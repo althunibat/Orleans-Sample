@@ -16,4 +16,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Godwit.Interfaces\Godwit.Interfaces.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Properties\launchSettings.json">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

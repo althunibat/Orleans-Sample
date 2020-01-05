@@ -21,28 +21,45 @@ namespace Godwit.Grains.Domain {
 
         public void Apply(IEvent @event) {
             switch (@event) {
-                case IAccountOpened evt1:
-                    Status = AccountStatus.Open;
-                    Amount = evt1.Amount;
-                    BranchCode = evt1.BranchCode;
-                    CustomerNumber = evt1.CustomerNumber;
-                    OpenTimeStamp = evt1.TimeStamp;
-                    Version++;
+                case AccountOpenedEvent evt1:
+                    Apply(evt1);
                     break;
-                case IAccountClosed evt2:
-                    Status = AccountStatus.Closed;
-                    CloseReason = evt2.Reason;
-                    CloseTimeStamp = evt2.TimeStamp;
-                    Version++;
+                case AccountClosedEvent evt2:
+                   Apply(evt2);
                     break;
-                case IAccountDeposited evt3:
-                    Amount += evt3.Amount;
+                case AccountDepositedEvent evt3:
+                   Apply(evt3);
                     break;
-                case IAccountWithDrawn evt4:
-                    Amount -= evt4.Amount;
-                    Version++;
+                case AccountWithDrawnEvent evt4:
+                   Apply(evt4);
                     break;
             }
+        }
+
+        private void Apply(AccountOpenedEvent @event) {
+            Status = AccountStatus.Open;
+            Amount = @event.Amount;
+            BranchCode = @event.BranchCode;
+            CustomerNumber = @event.CustomerNumber;
+            OpenTimeStamp = @event.TimeStamp;
+            Version++;
+        }
+
+        private void Apply(AccountClosedEvent @event) {
+            Status = AccountStatus.Closed;
+            CloseReason = @event.Reason;
+            CloseTimeStamp = @event.TimeStamp;
+            Version++;
+        }
+
+        private void Apply(AccountDepositedEvent @event) {
+            Amount +=  @event.Amount;
+            Version++;
+        }
+
+        private void Apply(AccountWithDrawnEvent @event) {
+            Amount -= @event.Amount;
+            Version++;
         }
     }
 }

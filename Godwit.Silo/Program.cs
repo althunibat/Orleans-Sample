@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using EventStore.ClientAPI;
 using Godwit.Grains;
+using Godwit.Interfaces;
 using Godwit.Silo.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,6 +77,8 @@ namespace Godwit.Silo {
 
 
         private static void InitializeLogs() {
+            const string format =
+                "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {SourceContext} [{TraceId}] {Message:lj} {Properties:lj}{NewLine}";
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
                 .MinimumLevel.Override("System", LogEventLevel.Warning)
@@ -84,7 +87,7 @@ namespace Godwit.Silo {
                 .Enrich.FromLogContext()
                 .Enrich.With(new TraceIdEnricher())
                 .Enrich.WithExceptionDetails()
-                .WriteTo.Console()
+                .WriteTo.Console(outputTemplate: format)
                 .CreateLogger();
         }
 

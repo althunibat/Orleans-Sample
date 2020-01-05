@@ -16,6 +16,7 @@ using Orleans;
 using Orleans.EventSourcing;
 using Orleans.EventSourcing.CustomStorage;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
+using Transaction = Godwit.Interfaces.Messages.Queries.Transaction;
 
 namespace Godwit.Grains {
     public class AccountGrain : JournaledGrain<AccountState, IEvent>, IAccountGrain,
@@ -39,7 +40,9 @@ namespace Godwit.Grains {
         }
 
         public async Task<bool> OpenAccount(OpenAccountCommand cmd) {
-            if (State.Status != AccountStatus.NotInitialized || cmd.Amount <= 0) return false;
+            if (State.Status != AccountStatus.NotInitialized || cmd.Amount <= 0)
+                throw new AccountTransactionException(
+                    $"Invalid Operation Detected! the account state is {State.Status} or Amount value is invalid");
 
             var @event = new AccountOpenedEvent(GrainReference.GetPrimaryKey(), cmd.CustomerNumber, cmd.BranchCode,
                 cmd.Amount);
@@ -49,7 +52,9 @@ namespace Godwit.Grains {
 
 
         public async Task<bool> CloseAccount(CloseAccountCommand cmd) {
-            if (State.Status != AccountStatus.Open && State.Amount >= 0) return false;
+            if (State.Status != AccountStatus.Open && State.Amount >= 0)
+                throw new AccountTransactionException(
+                    $"Invalid Operation Detected! the account state is {State.Status}");
 
             var @event = new AccountClosedEvent(GrainReference.GetPrimaryKey(), cmd.Reason);
             await RaiseEvent(@event);
@@ -57,18 +62,45 @@ namespace Godwit.Grains {
         }
 
         public async Task<bool> DepositAccount(DepositAccountCommand cmd) {
-            if (State.Status != AccountStatus.Open) return false;
-
-            var @event = new AccountDepositedEvent(GrainReference.GetPrimaryKey(), cmd.Amount);
+            if (State.Status != AccountStatus.Open)
+                throw new AccountTransactionException(
+                    $"Invalid Operation Detected! the account {GrainReference.GetPrimaryKey():N} is not open!");
+            // is same command is received, then just return.
+            if (this.State[cmd.Id] != null)
+                return true;
+            var @event = new AccountDepositedEvent(GrainReference.GetPrimaryKey(), cmd.Amount, cmd.Id);
             await RaiseEvent(@event);
             return true;
         }
 
         public async Task<bool> WithDrawAccount(WithDrawAccountCommand cmd) {
-            if (State.Status != AccountStatus.Open || State.Amount - cmd.Amount < 0) return false;
-
-            var @event = new AccountWithDrawnEvent(GrainReference.GetPrimaryKey(), cmd.Amount);
+            if (State.Status != AccountStatus.Open || State.Amount - cmd.Amount <= 0)
+                throw new AccountTransactionException(
+                    $"Invalid Operation Detected! the account {GrainReference.GetPrimaryKey():N} is not open! or invalid amount passed!");
+            // is same command is received, then just return.
+            if (this.State[cmd.Id] != null)
+                return true;
+            var @event = new AccountWithDrawnEvent(GrainReference.GetPrimaryKey(), cmd.Amount, cmd.Id);
             await RaiseEvent(@event);
+            return true;
+        }
+
+        public async Task<bool> RevertTransaction(RevertTransaction cmd) {
+            if (State.Status != AccountStatus.Open || State[cmd.TransactionId] == null)
+                throw new AccountTransactionException(
+                    $"Invalid Operation Detected! the account {GrainReference.GetPrimaryKey():N} is not open! Referenced Transaction is Invalid");
+            var transaction = State[cmd.TransactionId];
+            switch (transaction.Type) {
+                case TransactionType.Credit:
+                    var evt1 = new AccountDepositedEvent(GrainReference.GetPrimaryKey(), transaction.Amount, cmd.Id);
+                    await RaiseEvent(evt1);
+                    break;
+                case TransactionType.Debit:
+                    var evt2 = new AccountWithDrawnEvent(GrainReference.GetPrimaryKey(), transaction.Amount, cmd.Id);
+                    await RaiseEvent(evt2);
+                    break;
+            }
+
             return true;
         }
 
@@ -77,12 +109,13 @@ namespace Godwit.Grains {
 
             var details = new AccountDetails(GrainReference.GetPrimaryKey(), State.Status.ToString(),
                 State.Amount, State.CustomerNumber, State.BranchCode, State.CloseReason,
-                State.OpenTimeStamp, State.CloseTimeStamp);
+                State.OpenTimeStamp, State.CloseTimeStamp,
+                State.Transactions.Select(t => new Transaction(t.TransactionId, t.Type.ToString(), t.Amount)).ToList());
             return Task.FromResult(details);
         }
 
         public async Task<KeyValuePair<int, AccountState>> ReadStateFromStorage() {
-            _logger.LogInformation("Reading Events for Aggregate {0}", this.GetPrimaryKeyString());
+            _logger.LogInformation("Reading Events for Aggregate {0}", GrainReference.GetPrimaryKey().ToString("N"));
             var root = new AccountState();
             foreach (var @event in await LoadEvents(500)) root.Apply(@event);
 
@@ -96,14 +129,16 @@ namespace Godwit.Grains {
             if (version != expectedVersion) {
                 _logger.LogCritical("Expected version not matched for {0} ==> {1}!= {2}",
                     GrainReference.GetPrimaryKey().ToString("N"), version, expectedVersion);
-                return false;
+                throw new AccountTransactionException(
+                    $"Concurrency Exception Detected!");
             }
 
             foreach (var @event in updates)
                 await _connection.AppendToStreamAsync(StreamName, ExpectedVersion.Any,
-                    new EventData(@event.Id, @event.GetType().FullName, true,
+                    new EventData(@event.Id, @event.GetType().AssemblyQualifiedName, true,
                         Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(@event)),
                         Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new ArrayList()))));
+
 
             return true;
         }

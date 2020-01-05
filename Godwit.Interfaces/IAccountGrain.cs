@@ -9,6 +9,8 @@ namespace Godwit.Interfaces {
         public Task<bool> CloseAccount(CloseAccountCommand cmd);
         public Task<bool> DepositAccount(DepositAccountCommand cmd);
         public Task<bool> WithDrawAccount(WithDrawAccountCommand cmd);
+        public Task<bool> RevertTransaction(RevertTransaction cmd);
+
         public Task<AccountDetails> GetAccountDetails();
     }
 }

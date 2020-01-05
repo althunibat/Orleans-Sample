@@ -1,4 +1,15 @@
 # Orleans-Sample
 #EventSourcing, #DDD #dotnetcore #eventStore  
-Sample Using Event Sourcing and DDD using ms orleans.
 
+Orleans Sample DDD, Event sourcing using Orleans and Event Store
+
+1. to use this sample:
+
+- run event store using docker: refer to
+- update eventstore uri environment variable in &quot;Godwit.Silo&quot; launch settings json file
+- run &quot;Godwit.Silo&quot; Project
+- Run &quot;Godwit.WebApi&quot; Project
+
+1. to verify the usage
+
+- using &quot;Postman&quot;, load the collection &quot;[https://www.getpostman.com/collections/174ad0d025a5b17b30af](https://www.getpostman.com/collections/174ad0d025a5b17b30af)&quot;

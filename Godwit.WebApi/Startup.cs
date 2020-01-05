@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
 
 namespace Godwit.WebApi {
     public class Startup {
@@ -24,9 +25,7 @@ namespace Godwit.WebApi {
             if (env.IsDevelopment()) app.UseDeveloperExceptionPage();
 
             app.UseRouting();
-
-            app.UseAuthorization();
-
+            app.UseSerilogRequestLogging();
             app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
         }
     }

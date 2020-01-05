@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.Serialization;
 
-namespace Godwit.Grains.Domain {
+namespace Godwit.Interfaces {
     public class AccountTransactionException : ApplicationException {
         public AccountTransactionException() {
         }

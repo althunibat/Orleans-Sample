@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
+using Serilog.Exceptions;
 
 namespace Godwit.WebApi {
     public static class Program {
@@ -41,12 +42,13 @@ namespace Godwit.WebApi {
 
         private static void InitializeLogs() {
             const string format =
-                "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {SourceContext} [{RequestId}] {Message:lj} {Properties:lj}{NewLine}{Exception}";
+                "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {SourceContext} [{RequestId}] {Message:lj} {Properties:lj}{NewLine}";
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
                 .MinimumLevel.Override("System", LogEventLevel.Warning)
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .Enrich.FromLogContext()
+                .Enrich.WithExceptionDetails()
                 .WriteTo.Console(outputTemplate: format)
                 .CreateLogger();
         }

@@ -6,6 +6,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Godwit.Interfaces\Godwit.Interfaces.csproj" />
+      <PackageReference Include="EventStore.Client" Version="5.0.5" />
       <PackageReference Include="Microsoft.Orleans.CodeGenerator.MSBuild" Version="3.0.2">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -14,7 +15,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="EventStore.ClientAPI.NetCore" Version="4.1.0.23" />
       <PackageReference Include="Microsoft.Orleans.EventSourcing" Version="3.0.2" />
     </ItemGroup>
 

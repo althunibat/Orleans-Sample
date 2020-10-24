@@ -1,10 +1,9 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using EventStore.ClientAPI;
+using EventStore.Client;
 using Godwit.Grains.Domain;
 using Godwit.Interfaces;
 using Godwit.Interfaces.Messages.Commands;
@@ -21,19 +20,19 @@ using Transaction = Godwit.Interfaces.Messages.Queries.Transaction;
 namespace Godwit.Grains {
     public class AccountGrain : JournaledGrain<AccountState, IEvent>, IAccountGrain,
         ICustomStorageInterface<AccountState, IEvent> {
-        private readonly IEventStoreConnection _connection;
+        private readonly EventStoreClient _eventStoreClient;
         private readonly ILogger _logger;
         private string _streamName;
 
-        public AccountGrain(ILogger<AccountGrain> logger, IEventStoreConnection connection) {
+        public AccountGrain(ILogger<AccountGrain> logger, EventStoreClient eventStoreClient) {
             this._logger = logger;
-            this._connection = connection;
+            _eventStoreClient = eventStoreClient;
         }
 
         private string StreamName {
             get {
                 if (string.IsNullOrWhiteSpace(_streamName))
-                    _streamName = string.Concat(typeof(AccountState).Name.ToLower(), "-",
+                    _streamName = string.Concat(nameof(AccountState).ToLower(), "-",
                         GrainReference.GetPrimaryKey().ToString("N"));
                 return _streamName;
             }
@@ -117,7 +116,8 @@ namespace Godwit.Grains {
         public async Task<KeyValuePair<int, AccountState>> ReadStateFromStorage() {
             _logger.LogInformation("Reading Events for Aggregate {0}", GrainReference.GetPrimaryKey().ToString("N"));
             var root = new AccountState();
-            foreach (var @event in await LoadEvents(500)) root.Apply(@event);
+            
+            await foreach (var @event in LoadEvents()) root.Apply(@event);
 
             return new KeyValuePair<int, AccountState>(root.Version, root);
         }
@@ -132,14 +132,9 @@ namespace Godwit.Grains {
                 throw new AccountTransactionException(
                     $"Concurrency Exception Detected!");
             }
-
-            foreach (var @event in updates)
-                await _connection.AppendToStreamAsync(StreamName, ExpectedVersion.Any,
-                    new EventData(@event.Id, @event.GetType().AssemblyQualifiedName, true,
-                        Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(@event)),
-                        Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new ArrayList()))));
-
-
+            await _eventStoreClient.AppendToStreamAsync(StreamName, StreamState.Any,
+                updates.Select(@event=>new EventData(Uuid.FromGuid(@event.Id), @event.GetType().AssemblyQualifiedName??@event.GetType().Name,
+                    Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(@event)))));
             return true;
         }
 
@@ -148,44 +143,34 @@ namespace Godwit.Grains {
             await ConfirmEvents();
         }
 
-        private async Task<ICollection<IEvent>> LoadEvents(int bufferSize) {
-            var streamEvents = new List<ResolvedEvent>();
+        private async IAsyncEnumerable<IEvent> LoadEvents() {
+            var events = _eventStoreClient.ReadStreamAsync(
+                Direction.Forwards,
+                StreamName,
+                StreamPosition.Start);
+            if (await events.ReadState == ReadState.StreamNotFound) yield break;
+            await foreach (var @event in events) {
+                yield return DeserializeEvent(@event.Event);
+            }
 
-            StreamEventsSlice currentSlice;
-            long nextSliceStart = StreamPosition.Start;
-            do {
-                currentSlice =
-                    await _connection.ReadStreamEventsForwardAsync(StreamName, nextSliceStart,
-                        bufferSize, false);
-                nextSliceStart = currentSlice.NextEventNumber;
-
-                streamEvents.AddRange(currentSlice.Events);
-            } while (!currentSlice.IsEndOfStream);
-
-            return streamEvents.Select(e => DeserializeEvent(e.Event)).ToList();
         }
 
-        private IEvent DeserializeEvent(RecordedEvent @event) {
+        private IEvent DeserializeEvent(EventRecord @event) {
             var eventType = Type.GetType(@event.EventType);
             if (eventType == null)
                 _logger.LogCritical("Couldn't load type '{0}'. Are you missing an assembly reference?",
                     @event.EventType);
 
-            return JsonConvert.DeserializeObject(Encoding.UTF8.GetString(@event.Data), eventType) as IEvent;
+            return JsonConvert.DeserializeObject(Encoding.UTF8.GetString(@event.Data.ToArray()), eventType) as IEvent;
         }
 
 
-        private async Task<int> GetCurrentVersion() {
-            var result = await _connection.ReadEventAsync(StreamName, StreamPosition.End, false);
-            switch (result.Status) {
-                case EventReadStatus.NoStream:
-                case EventReadStatus.NotFound:
-                    return 0;
-                case EventReadStatus.Success:
-                    return result.Event.HasValue ? (int) (result.Event.Value.Event.EventNumber + 1) : -1;
-                default:
-                    return -1;
-            }
+        private async Task<long> GetCurrentVersion() {
+            var result = _eventStoreClient.ReadStreamAsync(Direction.Backwards, StreamName, StreamPosition.End, 1);
+            var state = await result.ReadState;
+            if (state != ReadState.Ok) return 0;
+            var e = await result.FirstAsync();
+            return e.Event.EventNumber.ToInt64() + 1;
         }
     }
 }

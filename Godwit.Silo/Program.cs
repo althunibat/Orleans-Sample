@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using EventStore.ClientAPI;
+using EventStore.Client;
 using Godwit.Grains;
-using Godwit.Interfaces;
 using Godwit.Silo.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,10 +65,19 @@ namespace Godwit.Silo {
                 .UseSerilog()
                 .ConfigureServices((ctx, services) => {
                     var config = ctx.Configuration;
-                    services.AddSingleton(c => {
-                        var conn = EventStoreConnection.Create(new Uri(config["ENVENTSTORE_URI"]));
-                        conn.ConnectAsync().Wait();
-                        return conn;
+                    services.AddEventStoreClient(settings => {
+                        settings.OperationOptions = new EventStoreClientOperationOptions {
+                            TimeoutAfter = TimeSpan.FromSeconds(30)
+                        };
+                        settings.ConnectivitySettings.Address = new Uri(config["ENVENTSTORE_URI"]);
+                         settings.CreateHttpMessageHandler = () =>
+                            new SocketsHttpHandler {
+                                SslOptions = {
+                                    RemoteCertificateValidationCallback = delegate {
+                                        return true;
+                                    }
+                                }
+                            };
                     });
                 })
                 .ConfigureAppConfiguration((ctx, config) => { config.AddEnvironmentVariables(); })

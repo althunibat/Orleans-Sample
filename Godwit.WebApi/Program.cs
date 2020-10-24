@@ -30,7 +30,8 @@ namespace Godwit.WebApi {
         }
 
         private static IHostBuilder CreateHostBuilder() {
-            return new HostBuilder().ConfigureWebHost(cfg => {
+            return new HostBuilder()
+                .ConfigureWebHost(cfg => {
                 cfg
                     .UseKestrel(opt => opt.AddServerHeader = false)
                     .UseContentRoot(Directory.GetCurrentDirectory())
@@ -46,7 +47,7 @@ namespace Godwit.WebApi {
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
                 .MinimumLevel.Override("System", LogEventLevel.Warning)
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
                 .Enrich.FromLogContext()
                 .Enrich.WithExceptionDetails()
                 .WriteTo.Console(outputTemplate: format)

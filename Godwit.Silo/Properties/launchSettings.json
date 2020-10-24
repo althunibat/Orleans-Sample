@@ -4,8 +4,8 @@
     "Godwit.Silo": {
       "commandName": "Project",
       "environmentVariables": {
-        "ENVENTSTORE_URI": "tcp://admin:changeit@localhost:1113"
+        "ENVENTSTORE_URI": "http://localhost:2113"
       }
     }
-  }
-}
+  } 
+} 

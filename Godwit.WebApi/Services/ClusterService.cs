@@ -5,8 +5,9 @@ using Godwit.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Orleans;
+using Orleans.Configuration;
 
-namespace Godwit.Client.Services {
+namespace Godwit.WebApi.Services {
     public class ClusterService : IHostedService {
         private readonly ILogger<ClusterService> _logger;
 
@@ -17,6 +18,10 @@ namespace Godwit.Client.Services {
                 .ConfigureApplicationParts(manager =>
                     manager.AddApplicationPart(typeof(IAccountGrain).Assembly).WithReferences())
                 .UseLocalhostClustering()
+                .Configure<ClusterOptions>(options => {
+                    options.ClusterId = "dev";
+                    options.ServiceId = "HelloWorldApp";
+                })
                 .Build();
         }
 

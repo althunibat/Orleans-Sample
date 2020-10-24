@@ -66,12 +66,11 @@ namespace Godwit.Silo {
                 .ConfigureServices((ctx, services) => {
                     var config = ctx.Configuration;
                     services.AddEventStoreClient(settings => {
-                        settings.OperationOptions = new EventStoreClientOperationOptions {
-                            TimeoutAfter = TimeSpan.FromSeconds(30)
-                        };
-                        settings.ConnectivitySettings.Address = new Uri(config["ENVENTSTORE_URI"]);
-                         settings.CreateHttpMessageHandler = () =>
-                            new SocketsHttpHandler {
+                        settings.ConnectivitySettings.Address = new Uri("https://localhost:2113");
+                        settings.DefaultCredentials = new UserCredentials("admin", "changeit");
+                        settings.CreateHttpMessageHandler = () =>
+                            new SocketsHttpHandler
+                            {
                                 SslOptions = {
                                     RemoteCertificateValidationCallback = delegate {
                                         return true;

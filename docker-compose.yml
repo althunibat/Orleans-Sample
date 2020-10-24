@@ -1,0 +1,39 @@
+version: '3.5'
+services:
+  setup:
+    image: eventstore/es-gencert-cli:1.0.2
+    entrypoint: bash
+    user: "1000:1000"
+    command: >
+      -c "mkdir -p ./certs && cd /certs
+      && es-gencert-cli create-ca
+      && es-gencert-cli create-node -out ./esdb-node --dns-names esdb-node
+      && find . -type f -print0 | xargs -0 chmod 666"
+    container_name: setup
+    volumes:
+      - ./certs:/certs
+
+  esdb-node:
+    image: eventstore/eventstore:20.6.1-buster-slim
+    container_name: esdb-node
+    environment:
+      - EVENTSTORE_CERTIFICATE_FILE=/certs/esdb-node/node.crt
+      - EVENTSTORE_CERTIFICATE_PRIVATE_KEY_FILE=/certs/esdb-node/node.key
+      - EVENTSTORE_TRUSTED_ROOT_CERTIFICATES_PATH=/certs/ca
+    healthcheck:
+      test:
+        [
+            'CMD-SHELL',
+            'curl --fail --insecure https://esdb-node:2113/health/live || exit 1',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    ports:
+      - 1113:1113
+      - 2113:2113
+    volumes:
+      - ./certs:/certs
+    depends_on:
+      - setup
+    restart: always
